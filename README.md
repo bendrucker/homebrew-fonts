@@ -14,15 +14,14 @@ config that names the released font needs no change to pick this one up.
 
 ```sh
 brew tap bendrucker/fonts
+brew trust bendrucker/fonts
+brew uninstall --cask font-monaspice-nerd-font
 brew install --cask font-monaspice-nerd-font-tip
 ```
 
-It conflicts with `font-monaspice-nerd-font`, which installs the same filenames.
-Uninstall that first:
-
-```sh
-brew uninstall --cask font-monaspice-nerd-font
-```
+Homebrew refuses to load casks from an untrusted third-party tap, hence `brew
+trust`. The uninstall is required too: this cask declares `conflicts_with` the
+released one, because both write the same filenames into `~/Library/Fonts`.
 
 ## iOS
 
