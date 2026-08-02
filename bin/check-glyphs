@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Assert that a font maps the codepoints this tap exists to deliver."""
+
+import argparse
+import sys
+
+from sfnt import FontError, codepoints
+
+REQUIRED = [
+    (0xEC1E, "cod-copilot"),
+    (0xEC5C, "cod-cursor"),
+    (0xEC81, "cod-openai"),
+    (0xEC82, "cod-claude"),
+    (0xF06A9, "md-robot"),
+]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("fonts", metavar="FONT", nargs="+", help="font file to check")
+    parser.add_argument(
+        "--require",
+        metavar="CODEPOINT",
+        action="append",
+        default=[],
+        type=parse_codepoint,
+        help="additional codepoint to require, e.g. U+EC82 (repeatable)",
+    )
+    parser.add_argument(
+        "--only",
+        action="store_true",
+        help="require only the --require codepoints, not the built-in list",
+    )
+    args = parser.parse_args()
+
+    required = [(codepoint, "") for codepoint in args.require]
+    if not args.only:
+        required = REQUIRED + required
+    if not required:
+        parser.error("--only needs at least one --require")
+
+    return 0 if all(check(font, required) for font in args.fonts) else 1
+
+
+def check(path, required):
+    print(path)
+    try:
+        present = codepoints(path)
+    except (FontError, OSError) as error:
+        print("  unreadable: {}".format(error))
+        return False
+
+    ok = True
+    for codepoint, name in required:
+        found = codepoint in present
+        ok = ok and found
+        label = "U+{:04X}".format(codepoint)
+        print("  {:<7} {:<7} {}".format("ok" if found else "MISSING", label, name).rstrip())
+    return ok
+
+
+def parse_codepoint(value):
+    try:
+        return int(value[2:] if value.upper().startswith("U+") else value, 16)
+    except ValueError:
+        raise argparse.ArgumentTypeError("{!r} is not a hex codepoint".format(value))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
