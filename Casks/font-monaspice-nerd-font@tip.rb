@@ -4,7 +4,7 @@ cask "font-monaspice-nerd-font@tip" do
 
   url "https://github.com/bendrucker/homebrew-fonts/releases/download/monaspice-tip-#{version}/MonaspiceNeNerdFontMono.zip"
   name "MonaspiceNe Nerd Font Mono (nerd-fonts tip)"
-  desc "Monaspace Neon patched from nerd-fonts master, ahead of the next Nerd Fonts release"
+  desc "Monaspace Neon patched from nerd-fonts master"
   homepage "https://github.com/bendrucker/homebrew-fonts"
 
   # The family name is identical to the released cask's, so both would install

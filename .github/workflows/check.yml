@@ -1,0 +1,24 @@
+name: check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cask:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tap
+
+      - name: Lint the cask
+        run: |
+          set -euo pipefail
+          taps="$(brew --repository)/Library/Taps/bendrucker"
+          mkdir -p "$taps"
+          mv tap "$taps/homebrew-fonts"
+
+          brew trust bendrucker/fonts
+          brew style bendrucker/fonts
+          brew audit --cask --online "bendrucker/fonts/font-monaspice-nerd-font@tip"
