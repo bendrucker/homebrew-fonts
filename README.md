@@ -59,6 +59,13 @@ bin/check-glyphs ~/Library/Fonts/MonaspiceNeNerdFontMono-Regular.otf
 `bin/new-codepoints OLD NEW` lists what a build gained, which is what fills in
 the release notes.
 
+## Licensing
+
+Monaspace is [SIL OFL 1.1][ofl] with the reserved font name "Monaspace", and the
+patched output inherits it. Every release ships `LICENSE-Monaspace.txt`, both
+inside the zip and as its own asset. The glyphs added by patching carry their own
+authors and copyrights, which the patcher records in the font's own metadata.
+
 ## Retirement
 
 This tap is temporary. When nerd-fonts ships a release whose symbols contain
@@ -75,3 +82,4 @@ Nothing else changes, because the family name is the same.
 [nerd-fonts]: https://github.com/ryanoasis/nerd-fonts
 [v3.4.0]: https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.4.0
 [releases]: https://github.com/bendrucker/homebrew-fonts/releases
+[ofl]: https://openfontlicense.org/

@@ -93,6 +93,7 @@ jobs:
             src/glyphs
             src/unpatched-fonts/Monaspace/Neon
             src/unpatched-fonts/Monaspace/config.cfg
+            src/unpatched-fonts/Monaspace/LICENSE
 
       - name: Patch Monaspace Neon
         run: |
@@ -125,8 +126,11 @@ jobs:
             cp "out/MonaspiceNeNerdFontMono-$style.otf" dist/
           done
 
+          # Monaspace is OFL 1.1, so the license travels with anything we hand out.
+          cp nerd-fonts/src/unpatched-fonts/Monaspace/LICENSE dist/LICENSE-Monaspace.txt
+
           cd dist
-          zip -q MonaspiceNeNerdFontMono.zip MonaspiceNeNerdFontMono-*.otf
+          zip -q MonaspiceNeNerdFontMono.zip MonaspiceNeNerdFontMono-*.otf LICENSE-Monaspace.txt
 
       - name: Check required glyphs
         run: |
@@ -184,7 +188,7 @@ jobs:
           version="$(date -u +%Y.%m.%d)-${commit:0:7}"
           tag="monaspice-tip-$version"
 
-          assets="dist/MonaspiceNeNerdFontMono.zip"
+          assets="dist/MonaspiceNeNerdFontMono.zip dist/LICENSE-Monaspace.txt"
           for style in $STYLES; do
             assets="$assets dist/MonaspiceNeNerdFontMono-$style.otf"
           done
