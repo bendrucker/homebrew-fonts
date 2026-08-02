@@ -1,6 +1,6 @@
 cask "font-monaspice-nerd-font-tip" do
-  version "0-unbuilt"
-  sha256 :no_check
+  version "2026.08.02-81aef4b"
+  sha256 "f2d896f55b5ae7c718f5e85d2deb43cac0b24c2fab1e785004f89b633818cd3b"
 
   url "https://github.com/bendrucker/homebrew-fonts/releases/download/monaspice-tip-#{version}/MonaspiceNeNerdFontMono.zip"
   name "MonaspiceNe Nerd Font Mono (nerd-fonts tip)"
