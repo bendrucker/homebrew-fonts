@@ -76,6 +76,10 @@ jobs:
     needs: sources
     if: needs.sources.outputs.build == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.pr.outputs.branch }}
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
 
@@ -206,6 +210,7 @@ jobs:
           echo "sha256=$(sha256sum dist/MonaspiceNeNerdFontMono.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Open a pull request for the cask bump
+        id: pr
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.release.outputs.version }}
@@ -237,15 +242,54 @@ jobs:
             number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
           fi
 
-          # The Actions app bypasses the branch ruleset, so this merges directly.
-          # Auto-merge would sit forever: pull requests opened with GITHUB_TOKEN do
-          # not trigger workflows, so the check it would wait on never runs.
+          {
+            echo "branch=$branch"
+            echo "number=$number"
+            echo "sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+  # Pull requests opened with GITHUB_TOKEN do not trigger workflows, so the check
+  # the ruleset requires has to be run and reported from inside this run.
+  lint:
+    needs: build
+    uses: ./.github/workflows/check.yml
+    with:
+      ref: ${{ needs.build.outputs.branch }}
+
+  land:
+    needs: [build, lint]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+    steps:
+      - name: Report the cask check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ needs.lint.result == 'success' && 'success' || 'failure' }}
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/${{ needs.build.outputs.sha }}" \
+            -f state="$STATE" \
+            -f context=cask \
+            -f description="brew style and brew audit" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Merge the cask pull request
+        if: needs.lint.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ needs.build.outputs.number }}
+        run: |
+          set -euo pipefail
           # Mergeability is not settled the instant the pull request is created.
           for _ in $(seq 24); do
-            [ "$(gh pr view "$number" --json mergeable --jq .mergeable)" = "MERGEABLE" ] && break
+            [ "$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json mergeable --jq .mergeable)" = "MERGEABLE" ] && break
             sleep 5
           done
-          gh pr merge "$number" --squash
+          gh pr merge "$NUMBER" --repo "$GITHUB_REPOSITORY" --squash
 
   retire:
     runs-on: ubuntu-latest
