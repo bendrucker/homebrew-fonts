@@ -257,4 +257,6 @@ jobs:
           - Delete this repository.
           EOF
 
-          gh issue create --title "$title" --body-file issue.md
+          # Assignment is the only thing that notifies. Nobody watches this repo,
+          # and a retirement signal nobody sees is not a signal.
+          gh issue create --title "$title" --body-file issue.md --assignee bendrucker

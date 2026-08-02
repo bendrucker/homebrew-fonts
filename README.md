@@ -27,6 +27,17 @@ The `@tip` token is what lets `brew bundle` swap between this cask and the
 released one automatically, in both directions. The quotes are belt and braces,
 since `@` is not special in bash or zsh.
 
+## Updates
+
+The build publishes a release and bumps the cask on its own. Picking it up is
+still `brew update && brew upgrade --cask`, same as any other cask.
+
+Nothing notifies you when a release lands. Most builds add no glyph anyone would
+notice, so "there was a build" is the wrong thing to push. Each release lists the
+codepoints it added since the previous one, and that list is what tells you
+whether an iOS re-import earns the trip. Watch this repo's releases if you would
+rather be told.
+
 ## iOS
 
 Rootshell and Moshi both read imported fonts. Each [release][releases] carries
