@@ -19,7 +19,7 @@ concurrency:
 
 env:
   UPSTREAM: ryanoasis/nerd-fonts
-  CASK: Casks/font-monaspice-nerd-font-tip.rb
+  CASK: Casks/font-monaspice-nerd-font@tip.rb
   STYLES: Regular Bold Italic BoldItalic
   SOURCE_PATHS: >-
     font-patcher
@@ -244,7 +244,7 @@ jobs:
 
           To retire it:
 
-          - \`brew uninstall --cask bendrucker/fonts/font-monaspice-nerd-font-tip\`
+          - \`brew uninstall --cask "bendrucker/fonts/font-monaspice-nerd-font@tip"\`
           - \`brew untap bendrucker/fonts\`
           - \`brew install --cask font-monaspice-nerd-font\`
           - Re-import the four styles on iOS from the upstream release.

@@ -16,12 +16,16 @@ config that names the released font needs no change to pick this one up.
 brew tap bendrucker/fonts
 brew trust bendrucker/fonts
 brew uninstall --cask font-monaspice-nerd-font
-brew install --cask font-monaspice-nerd-font-tip
+brew install --cask "font-monaspice-nerd-font@tip"
 ```
 
 Homebrew refuses to load casks from an untrusted third-party tap, hence `brew
 trust`. The uninstall is required too: this cask declares `conflicts_with` the
 released one, because both write the same filenames into `~/Library/Fonts`.
+
+The `@tip` token is what lets `brew bundle` swap between this cask and the
+released one automatically, in both directions. The quotes are belt and braces,
+since `@` is not special in bash or zsh.
 
 ## iOS
 
@@ -50,7 +54,7 @@ This tap is temporary. When nerd-fonts ships a release whose symbols contain
 `U+EC82`, the build opens an issue saying so, and the tap goes away:
 
 ```sh
-brew uninstall --cask bendrucker/fonts/font-monaspice-nerd-font-tip
+brew uninstall --cask "bendrucker/fonts/font-monaspice-nerd-font@tip"
 brew untap bendrucker/fonts
 brew install --cask font-monaspice-nerd-font
 ```
