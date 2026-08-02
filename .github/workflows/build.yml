@@ -13,6 +13,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 concurrency:
   group: build
@@ -200,11 +201,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum dist/MonaspiceNeNerdFontMono.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
-      - name: Point the cask at the release
+      - name: Open a pull request for the cask bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           sed -i -E \
-            -e 's|^  version .*$|  version "${{ steps.release.outputs.version }}"|' \
+            -e 's|^  version .*$|  version "'"$VERSION"'"|' \
             -e 's|^  sha256 .*$|  sha256 "${{ steps.release.outputs.sha256 }}"|' \
             "$CASK"
 
@@ -213,11 +217,18 @@ jobs:
             --arg sources "${{ needs.sources.outputs.digest }}" \
             '{commit: $commit, sources: $sources}' > nerd-fonts-source.json
 
+          branch="cask/$VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
           git add "$CASK" nerd-fonts-source.json
-          git commit -m "cask: ${{ steps.release.outputs.version }}"
-          git push
+          git commit -m "cask: $VERSION"
+          git push -f -u origin "$branch"
+
+          if ! gh pr view "$branch" --json number >/dev/null 2>&1; then
+            gh pr create --head "$branch" --base main --title "cask: $VERSION" --body-file notes.md
+          fi
+          gh pr merge "$branch" --auto --squash
 
   retire:
     runs-on: ubuntu-latest
