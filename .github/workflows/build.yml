@@ -237,16 +237,15 @@ jobs:
             number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
           fi
 
-          # Auto-merge needs a ruleset to wait on, and refuses to arm without one.
-          # Merging outright instead has to wait for GitHub to work out mergeability,
-          # which is not ready the instant the pull request is created.
-          if ! gh pr merge "$number" --auto --squash; then
-            for _ in $(seq 24); do
-              [ "$(gh pr view "$number" --json mergeable --jq .mergeable)" = "MERGEABLE" ] && break
-              sleep 5
-            done
-            gh pr merge "$number" --squash
-          fi
+          # The Actions app bypasses the branch ruleset, so this merges directly.
+          # Auto-merge would sit forever: pull requests opened with GITHUB_TOKEN do
+          # not trigger workflows, so the check it would wait on never runs.
+          # Mergeability is not settled the instant the pull request is created.
+          for _ in $(seq 24); do
+            [ "$(gh pr view "$number" --json mergeable --jq .mergeable)" = "MERGEABLE" ] && break
+            sleep 5
+          done
+          gh pr merge "$number" --squash
 
   retire:
     runs-on: ubuntu-latest
