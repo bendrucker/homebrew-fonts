@@ -232,7 +232,10 @@ jobs:
           if ! gh pr view "$branch" --json number >/dev/null 2>&1; then
             gh pr create --head "$branch" --base main --title "cask: $VERSION" --body-file notes.md
           fi
-          gh pr merge "$branch" --auto --squash
+          # Auto-merge needs a ruleset to wait on, and refuses to arm without one.
+          if ! gh pr merge "$branch" --auto --squash; then
+            gh pr merge "$branch" --squash
+          fi
 
   retire:
     runs-on: ubuntu-latest
