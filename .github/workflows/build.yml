@@ -1,0 +1,254 @@
+name: build
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even when the nerd-fonts sources are unchanged
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: build
+
+env:
+  UPSTREAM: ryanoasis/nerd-fonts
+  CASK: Casks/font-monaspice-nerd-font-tip.rb
+  STYLES: Regular Bold Italic BoldItalic
+  SOURCE_PATHS: >-
+    font-patcher
+    bin/scripts
+    src/glyphs
+    src/unpatched-fonts/Monaspace/Neon
+    src/unpatched-fonts/Monaspace/config.cfg
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.upstream.outputs.commit }}
+      digest: ${{ steps.upstream.outputs.digest }}
+      build: ${{ steps.upstream.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve the nerd-fonts sources
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          commit=$(gh api "repos/$UPSTREAM/commits/master" --jq .sha)
+
+          # Master moves for reasons that cannot change the patched output, so the
+          # freshness signal is the last commit to touch each input we consume.
+          sources=""
+          for path in $SOURCE_PATHS; do
+            touched=$(gh api "repos/$UPSTREAM/commits?sha=master&per_page=1&path=$path" --jq '.[0].sha // ""')
+            if [ -z "$touched" ]; then
+              echo "::error::$UPSTREAM no longer has $path. The freshness check cannot be trusted."
+              exit 1
+            fi
+            sources="$sources$path=$touched"$'\n'
+          done
+          digest=$(printf '%s' "$sources" | sha256sum | cut -d' ' -f1)
+
+          echo "$sources"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+          if [ "$digest" = "$(jq -r .sources nerd-fonts-source.json)" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sources unchanged since the last release. Nothing to build."
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: sources
+    if: needs.sources.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out the nerd-fonts sources
+        uses: actions/checkout@v7
+        with:
+          repository: ryanoasis/nerd-fonts
+          ref: ${{ needs.sources.outputs.commit }}
+          path: nerd-fonts
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            font-patcher
+            glyphnames.json
+            bin/scripts
+            src/glyphs
+            src/unpatched-fonts/Monaspace/Neon
+            src/unpatched-fonts/Monaspace/config.cfg
+
+      - name: Patch Monaspace Neon
+        run: |
+          set -euo pipefail
+          mkdir -p in out
+
+          for style in $STYLES; do
+            cp "nerd-fonts/src/unpatched-fonts/Monaspace/Neon/MonaspaceNeon-$style.otf" in/
+          done
+
+          # Mounting the checkout over /nerd pins the patcher and glyph sources to
+          # the resolved commit rather than whenever the image was built.
+          docker run --rm \
+            -e PN=4 \
+            -v "$PWD/nerd-fonts:/nerd" \
+            -v "$PWD/in:/in:ro" \
+            -v "$PWD/out:/out" \
+            nerdfonts/patcher \
+            --mono --complete --no-progressbars \
+            --configfile /nerd/src/unpatched-fonts/Monaspace/config.cfg
+
+          ls -la out
+
+      - name: Collect the patched fonts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          for style in $STYLES; do
+            cp "out/MonaspiceNeNerdFontMono-$style.otf" dist/
+          done
+
+          cd dist
+          zip -q MonaspiceNeNerdFontMono.zip MonaspiceNeNerdFontMono-*.otf
+
+      - name: Check required glyphs
+        run: |
+          set -euo pipefail
+          fonts=""
+          for style in $STYLES; do
+            fonts="$fonts dist/MonaspiceNeNerdFontMono-$style.otf"
+          done
+          # shellcheck disable=SC2086
+          bin/check-glyphs $fonts
+
+      - name: Write the release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          commit=${{ needs.sources.outputs.commit }}
+          previous=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""')
+
+          {
+            echo "Monaspace Neon patched from [\`${commit:0:7}\`](https://github.com/$UPSTREAM/commit/$commit)."
+            echo
+          } > notes.md
+
+          if [ -z "$previous" ]; then
+            echo "First build. Import all four styles on iOS." >> notes.md
+          else
+            gh release download "$previous" --pattern MonaspiceNeNerdFontMono-Regular.otf --dir previous
+            bin/new-codepoints \
+              previous/MonaspiceNeNerdFontMono-Regular.otf \
+              dist/MonaspiceNeNerdFontMono-Regular.otf \
+              --names nerd-fonts/glyphnames.json > added.md
+
+            if [ -s added.md ]; then
+              {
+                echo "### Codepoints added since \`$previous\`"
+                echo
+                cat added.md
+              } >> notes.md
+            else
+              echo "No codepoints were added since \`$previous\`. Re-importing on iOS gains you nothing." >> notes.md
+            fi
+          fi
+
+          cat notes.md
+
+      - name: Publish the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          commit=${{ needs.sources.outputs.commit }}
+          version="$(date -u +%Y.%m.%d)-${commit:0:7}"
+          tag="monaspice-tip-$version"
+
+          assets="dist/MonaspiceNeNerdFontMono.zip"
+          for style in $STYLES; do
+            assets="$assets dist/MonaspiceNeNerdFontMono-$style.otf"
+          done
+
+          # shellcheck disable=SC2086
+          gh release create "$tag" --title "$tag" --notes-file notes.md $assets
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum dist/MonaspiceNeNerdFontMono.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Point the cask at the release
+        run: |
+          set -euo pipefail
+          sed -i -E \
+            -e 's|^  version .*$|  version "${{ steps.release.outputs.version }}"|' \
+            -e 's|^  sha256 .*$|  sha256 "${{ steps.release.outputs.sha256 }}"|' \
+            "$CASK"
+
+          jq -n \
+            --arg commit "${{ needs.sources.outputs.commit }}" \
+            --arg sources "${{ needs.sources.outputs.digest }}" \
+            '{commit: $commit, sources: $sources}' > nerd-fonts-source.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$CASK" nerd-fonts-source.json
+          git commit -m "cask: ${{ steps.release.outputs.version }}"
+          git push
+
+  retire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check whether nerd-fonts has released the Codicon brand marks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
+
+          gh release download "$tag" --repo "$UPSTREAM" --pattern NerdFontsSymbolsOnly.zip --dir symbols
+          unzip -q -o symbols/NerdFontsSymbolsOnly.zip SymbolsNerdFontMono-Regular.ttf -d symbols
+
+          if ! bin/check-glyphs --only --require U+EC82 symbols/SymbolsNerdFontMono-Regular.ttf; then
+            echo "::notice::$UPSTREAM $tag still lacks U+EC82. This tap stays."
+            exit 0
+          fi
+
+          title="Retire this tap: $UPSTREAM $tag ships U+EC82"
+          if gh issue list --state open --json title --jq '.[].title' | grep -qxF "$title"; then
+            echo "::notice::Retirement issue is already open."
+            exit 0
+          fi
+
+          cat > issue.md <<EOF
+          [$UPSTREAM $tag](https://github.com/$UPSTREAM/releases/tag/$tag) contains \`U+EC82\` (\`cod-claude\`), which is the condition this tap was built to cover.
+
+          To retire it:
+
+          - \`brew uninstall --cask bendrucker/fonts/font-monaspice-nerd-font-tip\`
+          - \`brew untap bendrucker/fonts\`
+          - \`brew install --cask font-monaspice-nerd-font\`
+          - Re-import the four styles on iOS from the upstream release.
+          - Delete this repository.
+          EOF
+
+          gh issue create --title "$title" --body-file issue.md
