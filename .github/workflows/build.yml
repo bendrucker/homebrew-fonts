@@ -188,6 +188,12 @@ jobs:
             assets="$assets dist/MonaspiceNeNerdFontMono-$style.otf"
           done
 
+          # A forced rebuild lands on the same date and commit as the release it
+          # replaces, so the tag has to be reclaimed rather than added to.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag
+          fi
+
           # shellcheck disable=SC2086
           gh release create "$tag" --title "$tag" --notes-file notes.md $assets
 
